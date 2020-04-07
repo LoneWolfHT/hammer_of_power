@@ -61,14 +61,17 @@ minetest.register_node("hammer_of_power:hammer", {
 	on_place = function(_, placer, pointed_thing)
 		local name = placer:get_player_name()
 
-		if placer:get_player_velocity().y <= -10 then
+		if immune_to_fall_dmg[name] then return end
+
+		if placer:get_player_velocity().y <= -20 then
 			local pos = pointed_thing.above
 			local objs = minetest.get_objects_inside_radius(pos, 3)
 			local yvel = placer:get_player_velocity().y
 
 			for _, object in pairs(objs) do
-				local vel = vector.multiply(vector.direction(pos, object:get_pos()), math.abs(yvel/2))
-				vel.y = math.abs(yvel/2)
+				local vel = vector.multiply(vector.direction(pos, object:get_pos()), math.abs(yvel)/2.2)
+
+				vel.y = math.abs(yvel)/2.4
 
 				immune_to_fall_dmg[name] = true
 				minetest.after(1, function() immune_to_fall_dmg[name] = nil end)
@@ -172,7 +175,7 @@ minetest.register_node("hammer_of_power:steel_hammer", {
 minetest.register_on_player_hpchange(function(player, hp_change, reason)
 	local name = player:get_player_name()
 
-	if reason.type == "fall" and (immune_to_fall_dmg[name] or not cant_fling[name]) then
+	if reason.type == "fall" and (immune_to_fall_dmg[name] or cant_fling[name]) then
 		return 0, true
 	else
 		return hp_change
@@ -202,7 +205,7 @@ minetest.register_entity("hammer_of_power:flingent", {
 			if puncher:is_player() and (not self.player or name == self.player) then
 				spawn_particle_trail(puncher)
 
-				if not cant_fling then
+				if not cant_fling[name] then
 					cant_fling[name] = true
 					minetest.after(5, function() cant_fling[name] = nil end)
 				end
