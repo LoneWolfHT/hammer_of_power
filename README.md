@@ -1,6 +1,6 @@
 # Hammer of Power
 
-Adds a powerful hammer to the game.
+Adds a steel hammer and the powerful version that you can create from it.
 
 ### Supports Minetest Game and [Nodecore](https://content.minetest.net/packages/Warr1024/nodecore/)
 
