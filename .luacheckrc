@@ -3,7 +3,7 @@ read_globals = {
 	"minetest", "core", "nodecore",
 	"dump", "dump2",
 	"vector",
-	"VoxelManip", "VoxelArea",
+	"VoxelManip", "VoxelArea", "Raycast",
 	"PseudoRandom", "PcgRandom",
 	"ItemStack",
 	"Settings",
