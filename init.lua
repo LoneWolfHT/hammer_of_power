@@ -378,10 +378,12 @@ minetest.register_entity("hammer_of_power:hammerent", {
 			self.object:set_velocity(vector.new())
 			self.last_vel = self.object:get_velocity()
 
+			-- Start a raycast to see what we hit
 			local ray = Raycast(pos, vector.add(pos, vector.multiply(dir, 2)), true, false)
 
 			for pointed in ray do
 				if pointed ~= nil then
+					-- Check for player
 					if pointed.type == "object" and pointed.ref:is_player() and pointed.ref:get_player_name() ~= self.player then
 						self.attached_player = pointed.ref:get_player_name()
 						self.attachment = true
@@ -397,14 +399,14 @@ minetest.register_entity("hammer_of_power:hammerent", {
 						break
 					end
 
-					-- Start group of nodes
+					-- Check for a node
 					if pointed.type == "node" then
 						local count = kidnap_normal_nodes_in_area_and_return_count(self.object, pointed.under)
 
-						if count > 0 then
+						if count > 0 then -- Grabbable nodes were found, finish up the attaching
 							self.attachment = true
 
-							self.object:set_properties({physical = false})
+							self.object:set_properties({collide_with_objects = false})
 							break
 						end
 					end
