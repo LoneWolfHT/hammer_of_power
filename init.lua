@@ -167,6 +167,9 @@ minetest.register_node("hammer_of_power:hammer", {
 						spawn_particle_trail(object)
 					end
 				else
+					if object:get_luaentity().name:find("mobs") then
+						object:punch(placer, 5, {damage_groups = {fleshy = math.abs(yvel)/18}}, vector.direction(pos, object:get_pos()))
+					end
 					object:add_velocity(vel)
 					spawn_particle_trail(object)
 				end
