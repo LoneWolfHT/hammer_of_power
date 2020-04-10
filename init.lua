@@ -2,6 +2,16 @@ local cant_start_fling = {}
 local cant_fling = {}
 local immune_to_fall_dmg = {}
 
+local dirs = {
+	vector.new(),
+	vector.new(1, 0, 0),
+	vector.new(-1, 0, 0),
+	vector.new(0, 1, 0),
+	vector.new(0, -1, 0),
+	vector.new(0, 0, 1),
+	vector.new(0, 0, -1),
+}
+
 local function spawn_particle_trail(obj)
 	minetest.add_particlespawner({
 		amount = 100,
@@ -24,6 +34,79 @@ local function spawn_particle_trail(obj)
 		texture = "hammer_of_power_swirl.png",
 		glow = 2,
 	})
+end
+
+local function detach_all_node_ents_and_kill_leader(leader)
+	if leader:get_luaentity() then
+		local attached_nodes = leader:get_luaentity().attached_nodes
+
+		for _, obj in pairs(attached_nodes) do
+			if obj:get_luaentity() then
+				obj:set_detach()
+			end
+		end
+
+		leader:remove()
+	end
+end
+
+local function add_vector(collisionbox, vect)
+	if vect.x >= 0 then
+		collisionbox[4] = collisionbox[4] + vect.x
+	else
+		collisionbox[1] = collisionbox[1] + vect.x
+	end
+
+	if vect.y >= 0 then
+		collisionbox[5] = collisionbox[5] + vect.y
+	else
+		collisionbox[2] = collisionbox[2] + vect.y
+	end
+
+	if vect.z >= 0 then
+		collisionbox[6] = collisionbox[6] + vect.z
+	else
+		collisionbox[3] = collisionbox[3] + vect.z
+	end
+
+	return collisionbox
+end
+
+local function kidnap_normal_nodes_in_area_and_return_count(hammerent, pos)
+	local count = 0
+	local fakenode_leader
+	local fakenode_leader_self
+
+	for _, offset in ipairs(dirs) do
+		local p = vector.add(pos, offset)
+		local node = minetest.get_node(p).name
+
+		if minetest.registered_nodes[node].drawtype == "normal" then
+			count = count + 1
+
+			if not fakenode_leader then
+				fakenode_leader = minetest.add_entity(pos, "hammer_of_power:fakenode_leader")
+				fakenode_leader_self = fakenode_leader:get_luaentity()
+
+				fakenode_leader_self.follow = hammerent
+				hammerent:get_luaentity().attached_leader = fakenode_leader
+				fakenode_leader_self.attached_nodes = {}
+			end
+
+			local temp_obj = minetest.add_entity(p, "hammer_of_power:fakenode")
+			temp_obj:set_attach(fakenode_leader, "", vector.multiply(offset, 15), vector.new())
+			temp_obj:set_properties({wield_item = node})
+			temp_obj:get_luaentity().offset = offset
+			table.insert(fakenode_leader_self.attached_nodes, temp_obj)
+			minetest.remove_node(p)
+
+			local collisionbox = fakenode_leader:get_properties().collisionbox
+
+			fakenode_leader:set_properties({collisionbox = add_vector(collisionbox, offset)})
+		end
+	end
+
+	return count
 end
 
 minetest.register_node("hammer_of_power:hammer", {
@@ -303,6 +386,21 @@ minetest.register_entity("hammer_of_power:hammerent", {
 						obj:get_luaentity().follow = self.object
 						self.mimicobj = obj
 						obj:get_luaentity().mimic = self.attached_player
+
+						self.object:set_properties({physical = false})
+						break
+					end
+
+					-- Start group of nodes
+					if pointed.type == "node" then
+						local count = kidnap_normal_nodes_in_area_and_return_count(self.object, pointed.under)
+
+						if count > 0 then
+							self.attachment = true
+
+							self.object:set_properties({physical = false})
+							break
+						end
 					end
 				end
 			end
@@ -311,12 +409,19 @@ minetest.register_entity("hammer_of_power:hammerent", {
 		self.last_vel = vel
 
 		if self.attachment then
-			local owner = minetest.get_player_by_name(self.player)
-			local attached = minetest.get_player_by_name(self.attached_player or "")
+			local owner = minetest.get_player_by_name(self.player or "")
+
+			local attached = self.attached_leader or minetest.get_player_by_name(self.attached_player or "")
 
 			if not owner then
 				if attached then
-					attached:set_detach()
+					if self.attached_player then
+						attached:set_detach()
+					elseif self.attached_nodes then
+						detach_all_node_ents_and_kill_leader(self.attached_leader)
+						self.attached_leader = nil
+						self.attachment = nil
+					end
 				end
 
 				self.attachment = nil
@@ -325,9 +430,15 @@ minetest.register_entity("hammer_of_power:hammerent", {
 				return
 			end
 
-			if owner:get_player_control().RMB and attached then
-				attached:set_detach()
-				attached:add_player_velocity(vector.multiply(owner:get_look_dir(), 20))
+			if owner:get_player_control().LMB and attached then
+				if self.attached_player then
+					attached:set_detach()
+					attached:add_player_velocity(vector.multiply(owner:get_look_dir(), 20))
+				else
+					detach_all_node_ents_and_kill_leader(self.attached_leader)
+					self.attached_leader = nil
+				end
+
 				self.attachment = nil
 				self.timer = 2.1
 			else
@@ -344,7 +455,11 @@ minetest.register_entity("hammer_of_power:hammerent", {
 
 
 		if not self.attachment and self.timer > 2 then
-			if not self.player then self.object:remove() return end
+			if not self.player then
+				minetest.add_item(self.object:get_pos(), "hammer_of_power:hammer")
+				self.object:remove()
+				return
+			end
 
 			local owner = minetest.get_player_by_name(self.player)
 			local pos1 = self.object:get_pos()
@@ -382,6 +497,100 @@ minetest.register_entity("hammer_of_power:hammerent", {
 			self.object:remove()
 		end
 	end,
+})
+
+minetest.register_entity("hammer_of_power:playercopy", {
+	initial_properties = {
+		physical = false,
+		collide_with_objects = false,
+		pointable = false,
+		selectionbox = {-0.3, 0.0, -0.3, 0.3, 1.7, 0.3},
+		collisionbox = {-0.3, 0.0, -0.3, 0.3, 1.7, 0.3},
+		visual = "mesh",
+		mesh = "character.b3d",
+		textures = {"character.png"},
+		is_visible = true,
+		static_save = false,
+	},
+	on_step = function(self, _)
+		if self.mimic and self.follow then
+			local mimic = minetest.get_player_by_name(self.mimic)
+
+			self.object:set_properties({textures = mimic:get_properties().textures, mesh = mimic:get_properties().mesh})
+
+			if not mimic or not self.follow:get_luaentity() then self.object:remove() return end
+
+			local pos1 = self.object:get_pos()
+			local pos2 = self.follow:get_pos()
+
+			self.object:set_yaw(mimic:get_look_horizontal())
+			if vector.distance(pos1, pos2) > 1 then
+				self.object:set_velocity(vector.multiply(vector.direction(pos1, pos2), vector.distance(pos1, pos2)+10))
+			else
+				self.object:set_velocity(vector.new())
+			end
+		end
+	end
+})
+
+minetest.register_entity("hammer_of_power:fakenode_leader", {
+	initial_properties = {
+		physical = true,
+		collide_with_objects = false,
+		pointable = false,
+		visual = "item",
+		visual_size = vector.new(1.3, 1.3, 1.3),
+		wield_item = "air",
+		is_visible = true,
+		static_save = false,
+	},
+	on_step = function(self, _)
+		if self.follow then
+			if not self.follow:get_luaentity() then
+				self.object:remove()
+				return
+			end
+
+			local pos1 = self.object:get_pos()
+			local pos2 = self.follow:get_pos()
+
+			if vector.distance(pos1, pos2) > 1 then
+				self.object:set_velocity(vector.multiply(vector.direction(pos1, pos2), vector.distance(pos1, pos2)+10))
+			else
+				self.object:set_velocity(vector.new())
+			end
+		end
+	end
+})
+
+minetest.register_entity("hammer_of_power:fakenode", {
+	initial_properties = {
+		physical = true,
+		collide_with_objects = true,
+		pointable = true,
+		visual = "item",
+		is_visible = true,
+		static_save = true,
+	},
+	on_step = function(self, _)
+		if not self.object:get_attach() then
+			local item = self.object:get_properties().wield_item
+			local pos = self.object:get_pos()
+
+			self.object:remove()
+
+			if item and minetest.registered_nodes[item] then
+				local p = vector.add(pos, self.offset or vector.new())
+
+				if minetest.get_node(p).name == "air" then
+					minetest.set_node(p, {name = item})
+					minetest.spawn_falling_node(p)
+				else
+					minetest.add_item(p, item)
+				end
+			end
+		end
+	end
 })
 
 if minetest.get_modpath("default") then
