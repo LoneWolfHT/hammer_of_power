@@ -77,11 +77,13 @@ local function kidnap_normal_nodes_in_area_and_return_count(hammerent, pos)
 	local fakenode_leader
 	local fakenode_leader_self
 
+	if minetest.is_protected(pos, "") then return 0 end
+
 	for _, offset in ipairs(dirs) do
 		local p = vector.add(pos, offset)
 		local node = minetest.get_node(p).name
 
-		if minetest.registered_nodes[node].drawtype == "normal" then
+		if minetest.registered_nodes[node].drawtype == "normal" and not minetest.is_protected(p, "") then
 			count = count + 1
 
 			if not fakenode_leader then
@@ -356,7 +358,7 @@ minetest.register_entity("hammer_of_power:hammerent", {
 		static_save = true,
 	},
 	on_step = function(self, dtime)
-		if not self.timer then self.timer = 0 end
+		if not self.timer then self.timer = 0 self.detach_timer = 0 end
 
 		local vel = self.object:get_velocity()
 
@@ -380,6 +382,7 @@ minetest.register_entity("hammer_of_power:hammerent", {
 					if pointed.type == "object" and pointed.ref:is_player() and pointed.ref:get_player_name() ~= self.player then
 						self.attached_player = pointed.ref:get_player_name()
 						self.attachment = true
+						self.detach_timer_ok = true
 						pointed.ref:set_attach(self.object, "", vector.new(), vector.new())
 						local obj = minetest.add_entity(pos, "hammer_of_power:playercopy")
 
@@ -430,10 +433,11 @@ minetest.register_entity("hammer_of_power:hammerent", {
 				return
 			end
 
-			if owner:get_player_control().LMB and attached then
+			if owner:get_player_control().LMB and attached then -- Detach nodes/throw player
 				if self.attached_player then
 					attached:set_detach()
 					attached:add_player_velocity(vector.multiply(owner:get_look_dir(), 20))
+					self.attached_player = nil
 				else
 					detach_all_node_ents_and_kill_leader(self.attached_leader)
 					self.attached_leader = nil
@@ -441,7 +445,7 @@ minetest.register_entity("hammer_of_power:hammerent", {
 
 				self.attachment = nil
 				self.timer = 2.1
-			else
+			else------------------------------------------------- bring attachments 6 nodes out from player pointing dir
 				local pos1 = self.object:get_pos()
 				local pos2 = owner:get_pos()
 				pos2.y = pos2.y + 1.5
@@ -453,8 +457,22 @@ minetest.register_entity("hammer_of_power:hammerent", {
 			end
 		end
 
+		if self.detach_timer_ok then
+			if self.detach_timer < 5 then
+				self.detach_timer = self.detach_timer + dtime
+			else
+				local p = minetest.get_player_by_name(self.attached_player or "")
+				if p then
+					p:set_detach()
+					self.attached_player = nil
+				end
 
-		if not self.attachment and self.timer > 2 then
+				self.attachment = false
+				self.timer = 2.1
+			end
+		end
+
+		if not self.attachment and self.timer > 2 then -- make hammer return to player if timer is up and nothing is attached
 			if not self.player then
 				minetest.add_item(self.object:get_pos(), "hammer_of_power:hammer")
 				self.object:remove()
