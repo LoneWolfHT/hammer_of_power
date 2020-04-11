@@ -82,8 +82,19 @@ local function kidnap_normal_nodes_in_area_and_return_count(hammerent, pos)
 	for _, offset in ipairs(dirs) do
 		local p = vector.add(pos, offset)
 		local node = minetest.get_node(p).name
+		local meta = minetest.get_meta(p)
+		local metacount = 0
 
-		if minetest.registered_nodes[node].drawtype == "normal" and not minetest.is_protected(p, "") then
+		for _ in pairs(meta:to_table().fields) do
+			metacount = metacount + 1
+		end
+
+		for _ in pairs(meta:to_table().inventory) do
+			metacount = metacount + 1
+		end
+
+		if minetest.registered_nodes[node].drawtype == "normal" and not minetest.is_protected(p, "") and
+		metacount == 0 then
 			count = count + 1
 
 			if not fakenode_leader then
@@ -350,8 +361,8 @@ minetest.register_entity("hammer_of_power:hammerent", {
 		physical = true,
 		collide_with_objects = true,
 		pointable = true,
-		selectionbox = {-0.4, -0.4, -0.4, 0.4, 0.4, 0.4},
-		collisionbox = {-0.4, -0.4, -0.4, 0.4, 0.4, 0.4},
+		selectionbox = {-0.35, -0.35, -0.35, 0.35, 0.35, 0.35},
+		collisionbox = {-0.35, -0.35, -0.35, 0.35, 0.35, 0.35},
 		visual_size = vector.new(0.4, 0.4, 0.4),
 		visual = "wielditem",
 		wield_item = "hammer_of_power:hammer",
