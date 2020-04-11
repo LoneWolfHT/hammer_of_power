@@ -478,7 +478,7 @@ minetest.register_entity("hammer_of_power:hammerent", {
 		end
 
 		if not self.attachment and self.timer > 2 then -- make hammer return to player if timer is up and nothing is attached
-			if not self.player then
+			if not self.player or not minetest.get_player_by_name(self.player) then
 				minetest.add_item(self.object:get_pos(), "hammer_of_power:hammer")
 				self.object:remove()
 				return
