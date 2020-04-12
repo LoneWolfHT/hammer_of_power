@@ -36,17 +36,45 @@ local function spawn_particle_trail(obj)
 	})
 end
 
-local function detach_all_node_ents_and_kill_leader(leader)
+local function detach_all_node_ents_and_kill_leader(leader, user, drop_as_items)
 	if leader:get_luaentity() then
 		local attached_nodes = leader:get_luaentity().attached_nodes
+		local to_detach = {}
 
 		for _, obj in pairs(attached_nodes) do
 			if obj:get_luaentity() then
+				if (not minetest.is_protected(obj:get_pos(), user)) or drop_as_items then
+					table.insert(to_detach, obj)
+				else
+					return false -- Would place nodes in a protected area
+				end
+			end
+		end
+
+		if not drop_as_items then
+			for _, obj in pairs(to_detach) do
 				obj:set_detach()
+			end
+		else
+			for _, obj in pairs(to_detach) do
+				local p = obj:get_pos()
+				local drops = minetest.get_node_drops(obj:get_properties().wield_item)
+
+				if type(drops) == "string" then
+					minetest.add_item(p, drops)
+				elseif type(drops) == "table" then
+					for _, drop in pairs(drops) do
+						minetest.add_item(p, drop)
+					end
+				end
+
+				obj:remove()
 			end
 		end
 
 		leader:remove()
+
+		return true -- All nodes can be placed without violating protection
 	end
 end
 
@@ -423,6 +451,8 @@ minetest.register_entity("hammer_of_power:hammerent", {
 					end
 				end
 			end
+
+			self.timer = 1.8 -- Speed up return timer
 		end
 
 		self.last_vel = vel
@@ -436,10 +466,15 @@ minetest.register_entity("hammer_of_power:hammerent", {
 				if attached then
 					if self.attached_player then
 						attached:set_detach()
-					elseif self.attached_nodes then
-						detach_all_node_ents_and_kill_leader(self.attached_leader)
-						self.attached_leader = nil
-						self.attachment = nil
+					elseif self.attached_leader:get_luaentity() and self.attached_leader:get_luaentity().attached_nodes then
+						local result = detach_all_node_ents_and_kill_leader(self.attached_leader, "", false)
+
+						if result == true then
+							self.attached_leader = nil
+							self.attachment = nil
+						else
+							detach_all_node_ents_and_kill_leader(self.attached_leader, "", true)
+						end
 					end
 				end
 
@@ -450,25 +485,37 @@ minetest.register_entity("hammer_of_power:hammerent", {
 			end
 
 			if owner:get_player_control().LMB and attached then -- Detach nodes/throw player
+				local result = true
+
 				if self.attached_player then
 					attached:set_detach()
 					attached:add_player_velocity(vector.multiply(owner:get_look_dir(), 20))
 					self.attached_player = nil
 				else
-					detach_all_node_ents_and_kill_leader(self.attached_leader)
-					self.attached_leader = nil
+					local oname = owner:get_player_name()
+					result = detach_all_node_ents_and_kill_leader(self.attached_leader, oname, false)
+
+					if result == true then
+						self.attached_leader = nil
+					end
 				end
 
-				self.attachment = nil
-				self.timer = 2.1
-			else------------------------------------------------- bring attachments 6 nodes out from player pointing dir
+				if result == true then
+					self.attachment = nil
+					self.timer = 2.1
+				end
+			else------------------------------------- bring attachments 6 nodes out from player pointing dir
 				local pos1 = self.object:get_pos()
 				local pos2 = owner:get_pos()
 				pos2.y = pos2.y + 1.5
 
 				pos2 = vector.add(pos2, vector.multiply(owner:get_look_dir(), 6))
 
-				self.object:set_velocity(vector.multiply(vector.direction(pos1, pos2), vector.distance(pos1, pos2) + 5))
+				if vector.distance(pos1, pos2) >= 0.5 then
+					self.object:set_velocity(vector.multiply(vector.direction(pos1, pos2), vector.distance(pos1, pos2)+10))
+				else
+					self.object:set_velocity(vector.new())
+				end
 				self.last_vel = self.object:get_velocity()
 			end
 		end
@@ -558,7 +605,7 @@ minetest.register_entity("hammer_of_power:playercopy", {
 			local pos2 = self.follow:get_pos()
 
 			self.object:set_yaw(mimic:get_look_horizontal())
-			if vector.distance(pos1, pos2) > 1 then
+			if vector.distance(pos1, pos2) >= 0.5 then
 				self.object:set_velocity(vector.multiply(vector.direction(pos1, pos2), vector.distance(pos1, pos2)+10))
 			else
 				self.object:set_velocity(vector.new())
@@ -588,7 +635,7 @@ minetest.register_entity("hammer_of_power:fakenode_leader", {
 			local pos1 = self.object:get_pos()
 			local pos2 = self.follow:get_pos()
 
-			if vector.distance(pos1, pos2) > 1 then
+			if vector.distance(pos1, pos2) >= 0.5 then
 				self.object:set_velocity(vector.multiply(vector.direction(pos1, pos2), vector.distance(pos1, pos2)+10))
 			else
 				self.object:set_velocity(vector.new())
