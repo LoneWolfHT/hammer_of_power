@@ -310,6 +310,9 @@ minetest.register_on_player_hpchange(function(player, hp_change, reason)
 end, true)
 
 minetest.register_entity("hammer_of_power:flingent", {
+	on_activate = function(self)
+		self.object:set_armor_groups({immortal = 1})
+	end,
 	initial_properties = {
 		physical = true,
 		collide_with_objects = false,
@@ -385,6 +388,9 @@ minetest.register_entity("hammer_of_power:flingent", {
 })
 
 minetest.register_entity("hammer_of_power:hammerent", {
+	on_activate = function(self)
+		self.object:set_armor_groups({immortal = 1})
+	end,
 	initial_properties = {
 		physical = true,
 		collide_with_objects = true,
@@ -581,6 +587,9 @@ minetest.register_entity("hammer_of_power:hammerent", {
 })
 
 minetest.register_entity("hammer_of_power:playercopy", {
+	on_activate = function(self)
+		self.object:set_armor_groups({immortal = 1})
+	end,
 	initial_properties = {
 		physical = false,
 		collide_with_objects = false,
@@ -615,6 +624,9 @@ minetest.register_entity("hammer_of_power:playercopy", {
 })
 
 minetest.register_entity("hammer_of_power:fakenode_leader", {
+	on_activate = function(self)
+		self.object:set_armor_groups({immortal = 1})
+	end,
 	initial_properties = {
 		physical = true,
 		collide_with_objects = false,
@@ -645,6 +657,9 @@ minetest.register_entity("hammer_of_power:fakenode_leader", {
 })
 
 minetest.register_entity("hammer_of_power:fakenode", {
+	on_activate = function(self)
+		self.object:set_armor_groups({immortal = 1})
+	end,
 	initial_properties = {
 		physical = true,
 		collide_with_objects = true,
